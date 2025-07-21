@@ -1,0 +1,297 @@
+' HFSS VBScript for an 8-Pole Multi-Layer Stripline Filter
+' Description: This script generates a complete, parametric 8-pole filter
+' with a multi-layer stackup (Rogers 3010 / 2929 Prepreg), two types of
+' resonators (single and dual slot), and complex launch structures.
+' The layout is symmetric and contains no vias.
+
+'----------------------------------------------------------------------
+' 1. INITIALIZATION
+'----------------------------------------------------------------------
+Sub InitializeHFSS()
+    ' Initialize HFSS application and create a new project and design.
+    Set oAnsoftApp = CreateObject("AnsoftHfss.HfssScriptInterface")
+    Set oDesktop = oAnsoftApp.GetAppDesktop()
+    oDesktop.RestoreWindow
+    Set oProject = oDesktop.NewProject
+    oProject.InsertDesign "HFSS", "Stripline_Filter_8Pole", "DrivenModal", ""
+    Set oDesign = oProject.GetActiveDesign
+    Set oEditor = oDesign.SetActiveEditor("3D Modeler")
+    oEditor.SetModelUnits Array("NAME:Units Parameter", "Units:=", "mil", "Rescale:=", false)
+End Sub
+
+'----------------------------------------------------------------------
+' 2. MATERIAL DEFINITIONS
+'----------------------------------------------------------------------
+Sub DefineMaterials()
+    ' Define all necessary materials for the filter stackup.
+    Set oDefinitionManager = oProject.GetDefinitionManager()
+
+    ' Substrate Material: Rogers 3010
+    oDefinitionManager.AddMaterial Array("NAME:rogers_3010", "CoordinateSystemType:=", "Cartesian", _
+        Array("NAME:AttachedData"), "permittivity:=", "10.2", "dielectric_loss_tangent:=", "0.002")
+
+    ' Prepreg Material: 2929 Prepreg
+    oDefinitionManager.AddMaterial Array("NAME:prepreg_2929", "CoordinateSystemType:=", "Cartesian", _
+        Array("NAME:AttachedData"), "permittivity:=", "2.94", "dielectric_loss_tangent:=", "0.003")
+
+    ' Conductor Material: Copper
+    oDefinitionManager.AddMaterial Array("NAME:copper", "CoordinateSystemType:=", "Cartesian", _
+        Array("NAME:AttachedData"), Array("NAME:ModifierData"), "conductivity:=", "5.8e7")
+End Sub
+
+'----------------------------------------------------------------------
+' 3. PARAMETRIC VARIABLE DEFINITIONS
+'----------------------------------------------------------------------
+Sub DefineVariables()
+    ' Define all geometric and simulation parameters as variables for easy tuning.
+
+    ' -- Layer Stackup Heights
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:H_Core", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "10mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:H_Prepreg", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "4mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:H_Conductor", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "1.4mil"))))
+
+    ' -- Resonator A (Square, Single Slot) Dimensions
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResA_Size", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "80mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResA_Slot_W", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "10mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResA_Slot_L", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "40mil"))))
+
+    ' -- Resonator B (Rectangular, Dual Slot) Dimensions
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResB_W", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "90mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResB_L", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "70mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResB_Slot_W", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "8mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResB_Slot_L", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "35mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:ResB_Slot_Gap", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "12mil"))))
+
+    ' -- Spacing Parameters
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:X_Spacing1", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "15mil")))) ' Res1-2
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:X_Spacing2", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "20mil")))) ' Res2-3
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:X_Spacing3", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "15mil")))) ' Res3-4
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Y_Spacing", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "10mil")))) ' Between all resonators
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Launch_Spacing", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "12mil"))))
+
+    ' -- Launch Line Parameters
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Port_Width", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "25mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_one", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "50mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_two", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "30mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_three", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "40mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_four", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "20mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_five", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "20mil")))) ' Not in image, added for completeness
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_six", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "35mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_seven", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "25mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_eight", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "25mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_nine", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "15mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_ten", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "60mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Lio_eleven", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "70mil"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Launch_Width", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "10mil"))))
+
+    ' -- Simulation Parameters
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Freq_Center", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "10GHz"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Freq_Start", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "8GHz"))))
+    oDesign.ChangeProperty Array("NAME:AllTabs", Array("NAME:LocalVariableTab", Array("NAME:PropServers", "LocalVariables"), _
+        Array("NAME:NewProps", Array("NAME:Freq_Stop", "PropType:=", "VariableProp", "UserDef:=", true, "Value:=", "12GHz"))))
+End Sub
+
+'----------------------------------------------------------------------
+' 4. GEOMETRY CREATION
+'----------------------------------------------------------------------
+Sub CreateGeometry()
+    ' -- Create Layer Stackup
+    ' Bottom Ground Plane
+    oEditor.CreateBox Array("NAME:BoxParameters", "XPosition:=", "-250mil", "YPosition:=", "-250mil", "ZPosition:=", "-H_Core-H_Prepreg/2-H_Conductor", "XSize:=", "500mil", "YSize:=", "500mil", "ZSize:=", "H_Conductor"), Array("NAME:Attributes", "Name:=", "GND_Bottom", "Flags:=", "", "Color:=", "(255 128 64)", "Transparency:=", 0, "PartCoordinateSystem:=", "Global", "MaterialName:=", "copper", "SolveInside:=", true)
+
+    ' Bottom Core
+    oEditor.CreateBox Array("NAME:BoxParameters", "XPosition:=", "-250mil", "YPosition:=", "-250mil", "ZPosition:=", "-H_Core-H_Prepreg/2", "XSize:=", "500mil", "YSize:=", "500mil", "ZSize:=", "H_Core"), Array("NAME:Attributes", "Name:=", "Core_Bottom", "Flags:=", "", "Color:=", "(0 128 128)", "Transparency:=", 0.8, "PartCoordinateSystem:=", "Global", "MaterialName:=", "rogers_3010", "SolveInside:=", true)
+
+    ' Prepreg
+    oEditor.CreateBox Array("NAME:BoxParameters", "XPosition:=", "-250mil", "YPosition:=", "-250mil", "ZPosition:=", "-H_Prepreg/2", "XSize:=", "500mil", "YSize:=", "500mil", "ZSize:=", "H_Prepreg"), Array("NAME:Attributes", "Name:=", "Prepreg_Center", "Flags:=", "", "Color:=", "(0 128 0)", "Transparency:=", 0.8, "PartCoordinateSystem:=", "Global", "MaterialName:=", "prepreg_2929", "SolveInside:=", true)
+
+    ' Top Core
+    oEditor.CreateBox Array("NAME:BoxParameters", "XPosition:=", "-250mil", "YPosition:=", "-250mil", "ZPosition:=", "H_Prepreg/2", "XSize:=", "500mil", "YSize:=", "500mil", "ZSize:=", "H_Core"), Array("NAME:Attributes", "Name:=", "Core_Top", "Flags:=", "", "Color:=", "(0 128 128)", "Transparency:=", 0.8, "PartCoordinateSystem:=", "Global", "MaterialName:=", "rogers_3010", "SolveInside:=", true)
+
+    ' Top Ground Plane
+    oEditor.CreateBox Array("NAME:BoxParameters", "XPosition:=", "-250mil", "YPosition:=", "-250mil", "ZPosition:=", "H_Core+H_Prepreg/2", "XSize:=", "500mil", "YSize:=", "500mil", "ZSize:=", "H_Conductor"), Array("NAME:Attributes", "Name:=", "GND_Top", "Flags:=", "", "Color:=", "(255 128 64)", "Transparency:=", 0, "PartCoordinateSystem:=", "Global", "MaterialName:=", "copper", "SolveInside:=", true)
+
+    ' -- Create Resonators
+    ' Resonator positions will be calculated based on spacing variables
+    Dim x_pos, y_pos, z_pos
+    Dim res_list(8)
+
+    ' Res 4 (Type A)
+    x_pos = "-ResA_Size/2"
+    y_pos = "Y_Spacing/2 + ResB_L/2"
+    z_pos = "0" ' Center Layer
+    res_list(3) = CreateResonator(4, "A", x_pos, y_pos, z_pos)
+
+    ' Res 3 (Type B)
+    x_pos = "- (ResA_Size + X_Spacing3 + ResB_W/2)"
+    y_pos = "Y_Spacing/2 + ResB_L/2"
+    z_pos = "H_Prepreg/2 + H_Core/2" ' Top Layer
+    res_list(2) = CreateResonator(3, "B", x_pos, y_pos, z_pos)
+    
+    ' Res 2 (Type B)
+    x_pos = "- (ResA_Size + X_Spacing3 + ResB_W + X_Spacing2 + ResB_W/2)"
+    y_pos = "Y_Spacing/2 + ResB_L/2"
+    z_pos = "0" ' Center Layer
+    res_list(1) = CreateResonator(2, "B", x_pos, y_pos, z_pos)
+
+    ' Res 1 (Type A)
+    x_pos = "- (ResA_Size + X_Spacing3 + 2*ResB_W + X_Spacing2 + X_Spacing1 + ResA_Size/2)"
+    y_pos = "Y_Spacing/2 + ResB_L/2"
+    z_pos = "H_Prepreg/2 + H_Core/2" ' Top Layer
+    res_list(0) = CreateResonator(1, "A", x_pos, y_pos, z_pos)
+
+    ' Create Mirrored Resonators (5-8)
+    oEditor.DuplicateMirror Array("NAME:Selections", "Selections:=", res_list(0) & "," & res_list(1) & "," & res_list(2) & "," & res_list(3)), Array("NAME:DuplicateToMirrorParameters", "DuplicateMirrorBaseX:=", "0mil", "DuplicateMirrorBaseY:=", "0mil", "DuplicateMirrorBaseZ:=", "0mil", "DuplicateMirrorNormalX:=", "1mil", "DuplicateMirrorNormalY:=", "0mil", "DuplicateMirrorNormalZ:=", "0mil"), Array("NAME:Options", "DuplicateAssignments:=", false)
+    
+    ' -- Create Launch Structures
+    CreateLeftLaunch()
+    CreateRightLaunch()
+End Sub
+
+Function CreateResonator(res_num, res_type, x_pos, y_pos, z_pos)
+    ' This function creates a single resonator of the specified type at the given location.
+    Dim res_name, slot_name1, slot_name2
+    res_name = "Res" & res_num
+    
+    If res_type = "A" Then
+        ' Type A: Square with a single central slot
+        oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", x_pos & " - ResA_Size/2", "YStart:=", y_pos & " - ResA_Size/2", "ZStart:=", z_pos, "Width:=", "ResA_Size", "Height:=", "ResA_Size", "WhichAxis:=", "Z"), Array("NAME:Attributes", "Name:=", res_name, "Flags:=", "", "Color:=", "(255 0 0)", "MaterialName:=", "copper")
+        oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", x_pos & " - ResA_Slot_W/2", "YStart:=", y_pos & " - ResA_Slot_L/2", "ZStart:=", z_pos, "Width:=", "ResA_Slot_W", "Height:=", "ResA_Slot_L", "WhichAxis:=", "Z"), Array("NAME:Attributes", "Name:=", "Slot_A" & res_num, "Flags:=", "", "Color:=", "(255 0 0)")
+        oEditor.Subtract Array("NAME:Selections", "Blank Parts:=", res_name, "Tool Parts:=", "Slot_A" & res_num), Array("NAME:SubtractParameters", "KeepOriginals:=", false)
+    ElseIf res_type = "B" Then
+        ' Type B: Rectangular with dual slots
+        slot_name1 = "Slot_B1_" & res_num
+        slot_name2 = "Slot_B2_" & res_num
+        oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", x_pos & " - ResB_W/2", "YStart:=", y_pos & " - ResB_L/2", "ZStart:=", z_pos, "Width:=", "ResB_W", "Height:=", "ResB_L", "WhichAxis:=", "Z"), Array("NAME:Attributes", "Name:=", res_name, "Flags:=", "", "Color:=", "(0 0 255)", "MaterialName:=", "copper")
+        ' Slot 1
+        oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", x_pos & " - ResB_Slot_Gap/2 - ResB_Slot_W", "YStart:=", y_pos & " - ResB_Slot_L/2", "ZStart:=", z_pos, "Width:=", "ResB_Slot_W", "Height:=", "ResB_Slot_L", "WhichAxis:=", "Z"), Array("NAME:Attributes", "Name:=", slot_name1)
+        ' Slot 2
+        oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", x_pos & " + ResB_Slot_Gap/2", "YStart:=", y_pos & " - ResB_Slot_L/2", "ZStart:=", z_pos, "Width:=", "ResB_Slot_W", "Height:=", "ResB_Slot_L", "WhichAxis:=", "Z"), Array("NAME:Attributes", "Name:=", slot_name2)
+        oEditor.Subtract Array("NAME:Selections", "Blank Parts:=", res_name, "Tool Parts:=", slot_name1 & "," & slot_name2), Array("NAME:SubtractParameters", "KeepOriginals:=", false)
+    End If
+    
+    ' Sweep to give conductor thickness
+    oEditor.SweepAlongVector Array("NAME:Selections", "Selections:=", res_name, "NewPartsModelFlag:=", "Model"), Array("NAME:VectorSweepParameters", "SweepVectorX:=", "0mm", "SweepVectorY:=", "0mm", "SweepVectorZ:=", "H_Conductor", "DraftAngle:=", "0deg", "DraftType:=", "Round", "CheckFaceFaceIntersection:=", false)
+    
+    CreateResonator = res_name
+End Function
+
+Sub CreateLeftLaunch()
+    ' Creates the complex launch structure on the left side
+    oEditor.CreatePolyline Array("NAME:PolylineParameters", "IsPolylineCovered:=", true, "IsPolylineClosed:=", false, _
+        Array("NAME:PolylinePoints", _
+            Array("NAME:PLPoint", "X:=", "-180mil", "Y:=", "-100mil", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "-180mil", "Y:=", "-100mil+Lio_one", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "-180mil+Lio_two", "Y:=", "-100mil+Lio_one+Lio_three", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "-180mil+Lio_two+Lio_four", "Y:=", "-100mil+Lio_one+Lio_three+Lio_nine", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "-180mil+Lio_two+Lio_four+Lio_eight", "Y:=", "-100mil+Lio_one+Lio_three+Lio_nine-Lio_seven", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "-180mil+Lio_two+Lio_four+Lio_eight+Lio_eleven", "Y:=", "-100mil+Lio_one+Lio_three+Lio_nine-Lio_seven", "Z:=", "0mil") _
+        ), _
+        Array("NAME:PolylineSegments", Array("NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 0, "NoOfPoints:=", 6)), _
+        Array("NAME:PolylineXSection", "XSectionType:=", "Rectangle", "XSectionOrient:=", "Auto", "XSectionWidth:=", "Launch_Width", "XSectionHeight:=", "H_Conductor", "XSectionNumSegments:=", "0", "XSectionBendType:=", "Corner")), _
+        Array("NAME:Attributes", "Name:=", "Launch_Left", "Flags:=", "", "Color:=", "(0 255 0)", "MaterialName:=", "copper")
+End Sub
+
+Sub CreateRightLaunch()
+    ' Creates the complex launch structure on the right side (mirrored)
+    oEditor.CreatePolyline Array("NAME:PolylineParameters", "IsPolylineCovered:=", true, "IsPolylineClosed:=", false, _
+        Array("NAME:PolylinePoints", _
+            Array("NAME:PLPoint", "X:=", "180mil", "Y:=", "-100mil", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "180mil", "Y:=", "-100mil+Lio_one", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "180mil-Lio_two", "Y:=", "-100mil+Lio_one+Lio_three", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "180mil-Lio_two-Lio_four", "Y:=", "-100mil+Lio_one+Lio_three+Lio_nine", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "180mil-Lio_two-Lio_four-Lio_eight", "Y:=", "-100mil+Lio_one+Lio_three+Lio_nine-Lio_seven", "Z:=", "0mil"), _
+            Array("NAME:PLPoint", "X:=", "180mil-Lio_two-Lio_four-Lio_eight-Lio_eleven", "Y:=", "-100mil+Lio_one+Lio_three+Lio_nine-Lio_seven", "Z:=", "0mil") _
+        ), _
+        Array("NAME:PolylineSegments", Array("NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 0, "NoOfPoints:=", 6)), _
+        Array("NAME:PolylineXSection", "XSectionType:=", "Rectangle", "XSectionOrient:=", "Auto", "XSectionWidth:=", "Launch_Width", "XSectionHeight:=", "H_Conductor", "XSectionNumSegments:=", "0", "XSectionBendType:=", "Corner")), _
+        Array("NAME:Attributes", "Name:=", "Launch_Right", "Flags:=", "", "Color:=", "(0 255 0)", "MaterialName:=", "copper")
+End Sub
+
+'----------------------------------------------------------------------
+' 5. BOUNDARIES AND PORTS
+'----------------------------------------------------------------------
+Sub CreateBoundariesAndPorts()
+    ' Assign Perfect E boundaries to the ground planes
+    Set oModule = oDesign.GetModule("BoundarySetup")
+    oModule.AssignPerfectE Array("NAME:PerfE_Bottom", "Objects:=", Array("GND_Bottom"), "InfGroundPlane:=", false)
+    oModule.AssignPerfectE Array("NAME:PerfE_Top", "Objects:=", Array("GND_Top"), "InfGroundPlane:=", false)
+
+    ' Create Ports
+    ' Port 1 (Left)
+    oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", "-180mil-H_Conductor", "YStart:=", "-100mil-Port_Width/2", "ZStart:=", "-H_Prepreg/2", "Width:=", "Port_Width", "Height:=", "H_Prepreg", "WhichAxis:=", "X"), Array("NAME:Attributes", "Name:=", "Port1_Face", "Flags:=", "Wireframe#", "Color:=", "(255 0 255)")
+    oModule.AssignWavePort Array("NAME:1", "Objects:=", Array("Port1_Face"), "NumModes:=", 1, "RenormalizeAllTerminals:=", true, "UseLineAlignment:=", false, "DoDeembed:=", false, Array("NAME:Modes", Array("NAME:Mode1", "ModeNum:=", 1, "UseIntLine:=", true, "IntLine:=", Array("Start:=", Array("-180mil", "-100mil", "0mil"), "End:=", Array("-180mil", "-100mil", "H_Conductor")), "AlignmentGroup:=", 0, "RenormImp:=", "50ohm")), "ShowReporterFilter:=", false, "ReporterFilter:=", Array(true), "UseAnalyticAlignment:=", false)
+    
+    ' Port 2 (Right)
+    oEditor.CreateRectangle Array("NAME:RectangleParameters", "IsCovered:=", true, "XStart:=", "180mil", "YStart:=", "-100mil-Port_Width/2", "ZStart:=", "-H_Prepreg/2", "Width:=", "Port_Width", "Height:=", "H_Prepreg", "WhichAxis:=", "X"), Array("NAME:Attributes", "Name:=", "Port2_Face", "Flags:=", "Wireframe#", "Color:=", "(255 0 255)")
+    oModule.AssignWavePort Array("NAME:2", "Objects:=", Array("Port2_Face"), "NumModes:=", 1, "RenormalizeAllTerminals:=", true, "UseLineAlignment:=", false, "DoDeembed:=", false, Array("NAME:Modes", Array("NAME:Mode1", "ModeNum:=", 1, "UseIntLine:=", true, "IntLine:=", Array("Start:=", Array("180mil", "-100mil", "0mil"), "End:=", Array("180mil", "-100mil", "H_Conductor")), "AlignmentGroup:=", 0, "RenormImp:=", "50ohm")), "ShowReporterFilter:=", false, "ReporterFilter:=", Array(true), "UseAnalyticAlignment:=", false)
+
+    ' Create Airbox
+    oEditor.CreateBox Array("NAME:BoxParameters", "XPosition:=", "-300mil", "YPosition:=", "-300mil", "ZPosition:=", "-100mil", "XSize:=", "600mil", "YSize:=", "600mil", "ZSize:=", "200mil"), Array("NAME:Attributes", "Name:=", "Airbox", "Flags:=", "Wireframe#", "Color:=", "(128 128 128)", "Transparency:=", 0.95, "MaterialName:=", "air")
+    oModule.AssignRadiation Array("NAME:Rad_Airbox", "Objects:=", Array("Airbox"))
+End Sub
+
+'----------------------------------------------------------------------
+' 6. ANALYSIS SETUP
+'----------------------------------------------------------------------
+Sub CreateAnalysisSetup()
+    Set oModule = oDesign.GetModule("AnalysisSetup")
+    ' Adaptive Solution Setup
+    oModule.InsertSetup "HfssDriven", Array("NAME:Setup1", "Frequency:=", "Freq_Center", "PortsOnly:=", false, "MaxDeltaS:=", 0.02, "UseMatrixConv:=", false, "MaximumPasses:=", 10, "MinimumPasses:=", 2, "MinimumConvergedPasses:=", 1, "PercentRefinement:=", 30, "IsEnabled:=", true, "BasisOrder:=", 1)
+    
+    ' Frequency Sweep
+    oModule.InsertFrequencySweep "Setup1", Array("NAME:Sweep1", "IsEnabled:=", true, "RangeType:=", "LinearStep", "RangeStart:=", "Freq_Start", "RangeEnd:=", "Freq_Stop", "RangeStep:=", "0.05GHz", "Type:=", "Fast", "SaveFields:=", true, "SaveRadFields:=", false, "ExtrapToDC:=", false)
+End Sub
+
+'----------------------------------------------------------------------
+' 7. REPORTING
+'----------------------------------------------------------------------
+Sub CreateReports()
+    Set oModule = oDesign.GetModule("ReportSetup")
+    oModule.CreateReport "S Parameter Plot 1", "Standard", "Rectangular Plot", "Setup1 : Sweep1", Array("Domain:=", "Sweep"), Array("Freq:=", Array("All")), Array("X Component:=", "Freq", "Y Component:=", Array("S(1,1)", "S(2,1)")), Array()
+End Sub
+
+'----------------------------------------------------------------------
+' MAIN SCRIPT EXECUTION
+'----------------------------------------------------------------------
+Call InitializeHFSS()
+Call DefineMaterials()
+Call DefineVariables()
+Call CreateGeometry()
+Call CreateBoundariesAndPorts()
+Call CreateAnalysisSetup()
+Call CreateReports()
+
+MsgBox "8-Pole Stripline Filter script finished execution."
+
