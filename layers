@@ -1,0 +1,20 @@
+res2 is res A and it is on 4th layer of 2929. 
+
+res1 is resB and it is on 3rd layer.  of Rogers3010. 
+
+notice the symmetry of the filter location. 
+
+i also got a sweep failed function error. 
+
+also. theres no ground planes in the original filter. There are 5 layers. 
+
+bottom (fifth layer) is rogers3010_10mill with 10 mil thickness
+
+4th is 2929  with  2.25 mil thickness 
+
+3rd is Rogers3010 with 5 mill thickness
+
+2nd is 2929  with  2.25 mil thickness 
+
+1st is  rogers3010_10mil with 10 mil thickness
+
