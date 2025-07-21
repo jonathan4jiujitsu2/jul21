@@ -1,0 +1,47 @@
+after 209 line 
+
+
+oDesign.ChangeProperty Array("NAME:AllTabs", _
+    Array("NAME:LocalVariableTab", _
+    Array("NAME:PropServers", "LocalVariables"), _
+    Array("NAME:NewProps", _
+    Array("NAME:resB_slot_width", "PropType:=", "VariableProp", _
+    "UserDef:=", true, "Value:=", CStr(resB_slot_width) & "mil"))))
+
+oDesign.ChangeProperty Array("NAME:AllTabs", _
+    Array("NAME:LocalVariableTab", _
+    Array("NAME:PropServers", "LocalVariables"), _
+    Array("NAME:NewProps", _
+    Array("NAME:resB_slot_height", "PropType:=", "VariableProp", _
+    "UserDef:=", true, "Value:=", CStr(resB_slot_height) & "mil"))))
+
+oDesign.ChangeProperty Array("NAME:AllTabs", _
+    Array("NAME:LocalVariableTab", _
+    Array("NAME:PropServers", "LocalVariables"), _
+    Array("NAME:NewProps", _
+    Array("NAME:resB_gap", "PropType:=", "VariableProp", _
+    "UserDef:=", true, "Value:=", CStr(resB_gap) & "mil"))))
+
+oDesign.ChangeProperty Array("NAME:AllTabs", _
+    Array("NAME:LocalVariableTab", _
+    Array("NAME:PropServers", "LocalVariables"), _
+    Array("NAME:NewProps", _
+    Array("NAME:resA_slot_offset", "PropType:=", "VariableProp", _
+    "UserDef:=", true, "Value:=", CStr(resA_slot_offset) & "mil"))))
+
+
+    oDesign.ChangeProperty Array("NAME:AllTabs", _
+    Array("NAME:LocalVariableTab", _
+    Array("NAME:PropServers", "LocalVariables"), _
+    Array("NAME:NewProps", _
+    Array("NAME:Launch_width", "PropType:=", "VariableProp", _
+    "UserDef:=", true, "Value:=", CStr(Launch_width) & "mil"))))
+
+oDesign.ChangeProperty Array("NAME:AllTabs", _
+    Array("NAME:LocalVariableTab", _
+    Array("NAME:PropServers", "LocalVariables"), _
+    Array("NAME:NewProps", _
+    Array("NAME:Launch_spacing", "PropType:=", "VariableProp", _
+    "UserDef:=", true, "Value:=", CStr(Launch_spacing) & "mil"))))
+
+    
