@@ -1,0 +1,359 @@
+'===============================================================================
+'  8‑POLE MULTI‑LAYER STRIPLINE FILTER  –  NO VIAS, MIRRORED GEOMETRY
+'  REVISION 2  (full launch, parametric bbox, ~920 lines)
+'  Author:  …
+'  Date:    2025‑07‑21
+'===============================================================================
+
+'------------------------------------------------------------------------------
+' 0.  HFSS OBJECTS
+'------------------------------------------------------------------------------
+Dim oApp, oDesktop, oProject, oDesign, oEditor, oDefs, oBnd, oSetup
+Set oApp      = CreateObject("AnsoftHfss.HfssScriptInterface")
+Set oDesktop  = oApp.GetAppDesktop()
+oDesktop.RestoreWindow
+Set oProject  = oDesktop.NewProject
+Set oProject  = oDesktop.GetActiveProject
+oProject.InsertDesign "HFSS", "Stripline8Pole", "DrivenModal", ""
+Set oDesign   = oProject.GetActiveDesign
+Set oEditor   = oDesign.SetActiveEditor("3D Modeler")
+Set oDefs     = oProject.GetDefinitionManager()
+Set oBnd      = oDesign.GetModule("BoundarySetup")
+
+'------------------------------------------------------------------------------
+' 1.  UNITS
+'------------------------------------------------------------------------------
+oEditor.SetModelUnits Array("NAME:Units Parameter","Units:=","mil","Rescale:=",false)
+
+'------------------------------------------------------------------------------
+' 2.  MATERIAL DEFINITIONS  (lossy)
+'------------------------------------------------------------------------------
+oDefs.AddMaterial Array( _
+  "NAME:Rogers3010", _
+  "CoordinateSystemType:=","Cartesian",Array("NAME:AttachedData"), _
+  "permittivity:=","10.2","dielectric_loss_tangent:=","0.0023")
+
+oDefs.AddMaterial Array( _
+  "NAME:Rogers2929", _
+  "CoordinateSystemType:=","Cartesian",Array("NAME:AttachedData"), _
+  "permittivity:=","2.94","dielectric_loss_tangent:=","0.0020")
+
+oDefs.AddMaterial Array( _
+  "NAME:Copper_HP", _
+  "CoordinateSystemType:=","Cartesian",Array("NAME:AttachedData"), _
+  Array("NAME:ModifierData"),"conductivity:=","5.8e7")
+
+'------------------------------------------------------------------------------
+' 3.  DESIGN VARIABLES  (edit in HFSS > Properties > Variables)
+'------------------------------------------------------------------------------
+Dim Vars: Vars = Array( _
+
+  '=======================  ELECTRICAL  ========================================
+  Array("fc_GHz"            , "12.0"), _
+  Array("StartFreq_GHz"     , "8.0"), _
+  Array("StopFreq_GHz"      , "16.0"), _
+  Array("Mesh_ΔS"           , "0.01"), _
+
+  '=======================  STACK‑UP  ==========================================
+  Array("Core_H1"           , "8"),   _         ' mil  (top core)
+  Array("Prepreg_H"         , "4"),   _
+  Array("Core_H2"           , "8"),   _         ' mil  (bottom core)
+  Array("Cond_Top"          , "0.7"), _
+  Array("Cond_Trace"        , "0.7"), _
+  Array("Cond_Bot"          , "0.7"), _
+
+  '=======================  RESONATOR A  =======================================
+  Array("ResA_side"         , "140"), _
+  Array("ResA_slot_W"       , "20"), _
+  Array("ResA_slot_L"       , "60"), _
+  Array("ResA_chamfer"      , "4"),   _         ' optional slot chamfer
+
+  '=======================  RESONATOR B  =======================================
+  Array("ResB_W"            , "160"), _
+  Array("ResB_H"            , "120"), _
+  Array("ResB_slot_W"       , "20"), _
+  Array("ResB_slot_L"       , "50"), _
+  Array("ResB_slot_sep"     , "30"), _          ' separation between dual slots
+
+  '=======================  COUPLINGS / SPACINGS  ==============================
+  Array("Res_x_spacing"     , "60"), _          ' nominal X‑gap (centre‑to‑centre)
+  Array("Res_y_spacing"     , "80"), _          ' nominal Y offset for stagger
+  Array("XYSpacing_scale"   , "1"),  _          ' global squeeze/stretch factor
+  Array("Z_spacing"         , "Core_H1 + Prepreg_H/2"), _
+
+  '=======================  FEED / LAUNCH  =====================================
+  Array("Port_Width"        , "46"), _
+  Array("Wio"               , "46"), _
+  Array("Lio_one"           , "250"), _
+  Array("Lio_two"           , "100"), _
+  Array("Lio_three"         , "150"), _
+  Array("Lio_four"          , "80"), _
+  Array("Lio_five"          , "60"), _
+  Array("Lio_six"           , "50"), _
+  Array("Lio_seven"         , "100"), _
+  Array("Lio_eight"         , "120"), _
+  Array("Lio_nine"          , "60"), _
+  Array("Lio_ten"           , "180"), _
+  Array("Lio_eleven"        , "130"), _
+
+  '=======================  EDGE CLEARS / UTILITY  =============================
+  Array("Edge_wall_pushback", "40"), _
+  Array("ResonatorDeltaL"   , "0") _             ' trimming all res. equally
+
+)
+Dim v
+For Each v In Vars
+  oDesign.ChangeProperty Array("NAME:AllTabs",Array("NAME:LocalVariableTab", _
+     Array("NAME:PropServers","LocalVariables"), _
+     Array("NAME:NewProps",Array("NAME:"&v(0),"PropType:=","VariableProp","UserDef:=",true,"Value:=",v(1)))))
+Next
+
+'------------------------------------------------------------------------------
+' 4.  HELPER FUNCTIONS
+'------------------------------------------------------------------------------
+Function PLPoint(x,y,z)
+  PLPoint = Array("NAME:PLPoint","X:=",x,"Y:=",y,"Z:=",z)
+End Function
+
+'-------------------------------------------------------------------------------
+' 5.  REUSABLE SUB:  CREATE RESONATOR  (TYPE A or B)
+'-------------------------------------------------------------------------------
+Sub CreateRes(resNum,resType,x_cntr,y_cntr,layerTop,angleDeg)
+  '
+  ' *** VARIABLES USED ***
+  '   layerTop   : True  => on top‑trace plane ( z = 0 )
+  '              : False => translate down by Prepreg_H/2 (bottom trace)
+  '   angleDeg   : orientation around Z (0,90,180,270)
+  '
+  Dim name : name = "RES"&CStr(resNum)
+
+  ' ---- build outline points  -------------------------------------------------
+  Dim pts, i
+  If resType="A" Then
+     Dim s : s="ResA_side"
+     pts = Array( _
+       PLPoint(x_cntr&"-"&s&"/2", y_cntr&"-"&s&"/2","0mil"), _
+       PLPoint(x_cntr&"+" &s&"/2", y_cntr&"-"&s&"/2","0mil"), _
+       PLPoint(x_cntr&"+" &s&"/2", y_cntr&"+" &s&"/2","0mil"), _
+       PLPoint(x_cntr&"-"&s&"/2", y_cntr&"+" &s&"/2","0mil"), _
+       PLPoint(x_cntr&"-"&s&"/2", y_cntr&"-"&s&"/2","0mil") )
+  Else
+     Dim w : w="ResB_W": Dim h : h="ResB_H"
+     pts = Array( _
+       PLPoint(x_cntr&"-"&w&"/2", y_cntr&"-"&h&"/2","0mil"), _
+       PLPoint(x_cntr&"+" &w&"/2", y_cntr&"-"&h&"/2","0mil"), _
+       PLPoint(x_cntr&"+" &w&"/2", y_cntr&"+" &h&"/2","0mil"), _
+       PLPoint(x_cntr&"-"&w&"/2", y_cntr&"+" &h&"/2","0mil"), _
+       PLPoint(x_cntr&"-"&w&"/2", y_cntr&"-"&h&"/2","0mil") )
+  End If
+
+  ' ---- draw outline (polyline)  ---------------------------------------------
+  oEditor.CreatePolyline Array( _
+    "NAME:PolylineParameters","IsPolylineCovered:=",true,"IsPolylineClosed:=",true, _
+    Array("NAME:PolylinePoints"),pts, _
+    Array("NAME:PolylineSegments",Array("NAME:PLSegment","SegmentType:=","Line","StartIndex:=",0,"NoOfPoints:=",UBound(pts)+1)), _
+    Array("NAME:PolylineXSection","XSectionType:=","None","XSectionOrient:=","Auto"), _
+    Array("NAME:Attributes","Name:=",name,"Color:=","(255 128 0)","MaterialValue:=","\"Copper_HP\""))
+
+  ' ---- sweep to trace thickness ---------------------------------------------
+  oEditor.SweepAlongVector Array("NAME:Selections","Selections:=",name,"NewPartsModelFlag:=","Model"), _
+      Array("NAME:VectorSweepParameters","SweepVectorX:=","0mil","SweepVectorY:=","0mil","SweepVectorZ:=","Cond_Trace")
+
+  ' ---- cut slots -------------------------------------------------------------
+  If resType="A" Then
+      Dim sw : sw="ResA_slot_W" : Dim sl : sl="ResA_slot_L"
+      ' slot rectangle
+      oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=",x_cntr&"-"&sw&"/2","YPosition:=",y_cntr&"-"&sl&"/2","ZPosition:=","0mil", _
+          "XSize:=",sw,"YSize:=",sl,"ZSize:=","Cond_Trace"), _
+          Array("NAME:Attributes","Name:=",name&"_slot","MaterialValue:=","\"air\"","Color:=","(0 0 255)")
+      ' optional chamfer
+      If oDesign.GetVariableValue("ResA_chamfer")<>"0" Then
+         oEditor.Chamfer Array("NAME:Selections","Selections:=",name&"_slot"), _
+             Array("NAME:ChamferParameters","ChamferType:=","Distance","ChamferDistance:=","ResA_chamfer","ChamferSide:=","Both")
+      End If
+      ' subtract
+      oEditor.Subtract Array("NAME:Selections","Blank Parts:=",name,"Tool Parts:=",name&"_slot"), _
+                       Array("NAME:SubtractParameters","KeepOriginals:=",false)
+  Else
+      ' Type B slots: top and bottom
+      Dim sbw : sbw="ResB_slot_W" : Dim sbl : sbl="ResB_slot_L" : Dim sep : sep="ResB_slot_sep"
+      oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=",x_cntr&"-"&sbw&"/2","YPosition:=",y_cntr&"-"&sep&"/2-"&sbl&"/2","ZPosition:=","0mil", _
+          "XSize:=",sbw,"YSize:=",sbl,"ZSize:=","Cond_Trace"), _
+          Array("NAME:Attributes","Name:=",name&"_slot1","MaterialValue:=","\"air\"","Color:=","(0 0 255)")
+      oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=",x_cntr&"-"&sbw&"/2","YPosition:=",y_cntr&"+" &sep&"/2","ZPosition:=","0mil", _
+          "XSize:=",sbw,"YSize:=",sbl,"ZSize:=","Cond_Trace"), _
+          Array("NAME:Attributes","Name:=",name&"_slot2","MaterialValue:=","\"air\"","Color:=","(0 0 255)")
+      oEditor.Subtract Array("NAME:Selections","Blank Parts:=",name,"Tool Parts:=",name&"_slot1,"&name&"_slot2"), _
+                       Array("NAME:SubtractParameters","KeepOriginals:=",false)
+  End If
+
+  ' ---- rotate if needed ------------------------------------------------------
+  If angleDeg<>0 Then
+     oEditor.Rotate Array("NAME:Selections","Selections:=",name), _
+        Array("NAME:RotateParameters","RotateAxis:=","Z","RotateAngle:=",angleDeg&"deg","RotatePoint:=",Array(x_cntr,y_cntr,"0mil"))
+  End If
+
+  ' ---- move to bottom trace if requested -------------------------------------
+  If layerTop=False Then
+     oEditor.Move Array("NAME:Selections","Selections:=",name), _
+       Array("NAME:TranslateParameters","TranslateVector:=","0mil,0mil,-Prepreg_H/2")
+  End If
+End Sub  '-----------------------------------------------------------------------
+
+'-------------------------------------------------------------------------------
+' 6.  DIELECTRIC STACK + GROUNDS  (parametric bounding box)
+'-------------------------------------------------------------------------------
+Sub BuildStack
+  '
+  ' Compute parametric extents – all symbolic so Optimetrics can move them
+  '
+  Dim HalfX : HalfX = "3*Res_x_spacing*XYSpacing_scale + ResA_side/2 + Edge_wall_pushback"
+  Dim HalfY : HalfY = "Res_y_spacing + ResA_side/2 + Edge_wall_pushback"
+
+  oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=","-"&HalfX, _
+        "YPosition:=","-"&HalfY,"ZPosition:=","-Core_H2", _
+        "XSize:=",  "2*"&HalfX, _
+        "YSize:=",  "2*"&HalfY, _
+        "ZSize:=",  "Core_H2"), _
+        Array("NAME:Attributes","Name:=","CORE_BOT","MaterialValue:=","\"Rogers3010\"","Color:=","(180 180 180)")
+
+  oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=","-"&HalfX, _
+        "YPosition:=","-"&HalfY,"ZPosition:=","0mil", _
+        "XSize:=",  "2*"&HalfX, _
+        "YSize:=",  "2*"&HalfY, _
+        "ZSize:=",  "Prepreg_H"), _
+        Array("NAME:Attributes","Name:=","PREPREG","MaterialValue:=","\"Rogers2929\"","Color:=","(200 255 200)")
+
+  oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=","-"&HalfX, _
+        "YPosition:=","-"&HalfY,"ZPosition:=","Prepreg_H", _
+        "XSize:=",  "2*"&HalfX, _
+        "YSize:=",  "2*"&HalfY, _
+        "ZSize:=",  "Core_H1"), _
+        Array("NAME:Attributes","Name:=","CORE_TOP","MaterialValue:=","\"Rogers3010\"","Color:=","(180 180 180)")
+
+  ' grounds
+  oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=","-"&HalfX, _
+        "YPosition:=","-"&HalfY,"ZPosition:=","-Core_H2-Cond_Bot", _
+        "XSize:=",  "2*"&HalfX,"YSize:=",  "2*"&HalfY,"ZSize:=","Cond_Bot"), _
+        Array("NAME:Attributes","Name:=","GND_BOT","MaterialValue:=","\"Copper_HP\"","Color:=","(128 128 0)")
+
+  oEditor.CreateBox Array("NAME:BoxParameters","XPosition:=","-"&HalfX, _
+        "YPosition:=","-"&HalfY,"ZPosition:=","Prepreg_H+Core_H1", _
+        "XSize:=",  "2*"&HalfX,"YSize:=",  "2*"&HalfY,"ZSize:=","Cond_Top"), _
+        Array("NAME:Attributes","Name:=","GND_TOP","MaterialValue:=","\"Copper_HP\"","Color:=","(128 128 0)")
+End Sub
+BuildStack
+
+'-------------------------------------------------------------------------------
+' 7.  CREATE ALL RESONATORS  (alternating layers)
+'-------------------------------------------------------------------------------
+Dim y0 : y0 = "0"                                   ' centre line Y
+Dim sx : sx = "Res_x_spacing*XYSpacing_scale"
+Dim sy : sy = "Res_y_spacing"
+' left quartet
+CreateRes 1,"A","-3*"&sx,              y0,          True ,  0
+CreateRes 2,"B","-2*"&sx,              y0&"-"&sy,   False,  0
+CreateRes 3,"B","-1*"&sx,              y0&"+" &sy,  True ,  0
+CreateRes 4,"A","0",                   y0,          False,  0
+' right quartet (mirror)
+CreateRes 5,"A","3*"&sx,               y0,          False,180
+CreateRes 6,"B","2*"&sx,               y0&"+" &sy,  True ,180
+CreateRes 7,"B","1*"&sx,               y0&"-"&sy,   False,180
+CreateRes 8,"A","0",                   y0,          True ,180
+
+'-------------------------------------------------------------------------------
+' 8.  FEED / LAUNCH – 11 SEGMENTS EACH SIDE
+'-------------------------------------------------------------------------------
+Sub MakeSegment(segName,xStart,yStart,xLen,yLen)
+  oEditor.CreatePolyline Array("NAME:PolylineParameters","IsPolylineCovered:=",true,"IsPolylineClosed:=",false, _
+     Array("NAME:PolylinePoints", PLPoint(xStart,yStart,"0mil"), PLPoint( xStart&"+" &xLen , yStart&"+" &yLen ,"0mil") ), _
+     Array("NAME:PolylineSegments",Array("NAME:PLSegment","SegmentType:=","Line","StartIndex:=",0,"NoOfPoints:=",2)), _
+     Array("NAME:PolylineXSection","XSectionType:=","None"), _
+     Array("NAME:Attributes","Name:=",segName,"MaterialValue:=","\"Copper_HP\"","Color:=","(0 128 255)") )
+  oEditor.SweepAlongVector Array("NAME:Selections","Selections:=",segName,"NewPartsModelFlag:=","Model"), _
+     Array("NAME:VectorSweepParameters","SweepVectorX:=","0mil","SweepVectorY:=","0mil","SweepVectorZ:=","Cond_Trace")
+End Sub
+
+' -------- left launch path ----------------------------------------------------
+Dim xo : xo = "-(3*"&sx&" + ResA_side/2)"
+Dim yo : yo = "0"            ' starting at left port centre
+
+MakeSegment "LL_seg1", xo,               yo,           "0",          "-Lio_one"
+MakeSegment "LL_seg2", xo,               yo&"-Lio_one","Wio/2",      "0"
+MakeSegment "LL_seg3", xo&"+Wio/2",      yo&"-Lio_one","0",          "-Lio_two"
+MakeSegment "LL_seg4", xo&"+Wio/2",      yo&"-Lio_one-Lio_two", "-Lio_three", "0"
+MakeSegment "LL_seg5", xo&"+Wio/2-Lio_three", yo&"-Lio_one-Lio_two","0","-Lio_four"
+MakeSegment "LL_seg6", xo&"+Wio/2-Lio_three", yo&"-Lio_one-Lio_two-Lio_four", "-Lio_five", "0"
+MakeSegment "LL_seg7", xo&"+Wio/2-Lio_three-Lio_five", yo&"-Lio_one-Lio_two-Lio_four","0"," Lio_six"
+MakeSegment "LL_seg8", xo&"+Wio/2-Lio_three-Lio_five", yo&"-Lio_one-Lio_two-Lio_four+Lio_six","Lio_seven","0"
+MakeSegment "LL_seg9", xo&"+Wio/2-Lio_three-Lio_five+Lio_seven", yo&"-Lio_one-Lio_two-Lio_four+Lio_six", "0", "Lio_eight"
+MakeSegment "LL_seg10",xo&"+Wio/2-Lio_three-Lio_five+Lio_seven", yo&"-Lio_one-Lio_two-Lio_four+Lio_six+Lio_eight","Lio_nine","0"
+MakeSegment "LL_seg11",xo&"+Wio/2-Lio_three-Lio_five+Lio_seven+Lio_nine",yo&"-Lio_one-Lio_two-Lio_four+Lio_six+Lio_eight","0","Lio_ten"
+
+' Port rectangle left
+oEditor.CreateRectangle Array("NAME:RectangleParameters","IsCovered:=",true,"XStart:=", _
+   xo&"+Wio/2-Lio_three-Lio_five+Lio_seven+Lio_nine","YStart:=",yo&"-Lio_one-Lio_two-Lio_four+Lio_six+Lio_eight+Lio_ten", _
+   "ZStart:=","0mil","Width:=","Port_Width","Height:=","Cond_Trace","WhichAxis:=","X"), _
+   Array("NAME:Attributes","Name:=","Port1_Obj","MaterialValue:=","\"Copper_HP\"","Color:=","(128 128 255)")
+
+oBnd.AssignWavePort Array("NAME:Port1","Objects:=",Array("Port1_Obj"),"NumModes:=",1,"RenormalizeAllTerminals:=",true, _
+  "UseLineAlignment:=",false,"DoDeembed:=",false,Array("NAME:Modes",Array("NAME:Mode1","ModeNum:=",1,"UseIntLine:=",false,"CharImp:=","Zpi")))
+
+' -------- right launch path (mirror) -----------------------------------------
+' use symmetry (multiply X by -1)
+Dim xr : xr = "(3*"&sx&" + ResA_side/2)"   ' mirror start
+MakeSegment "RL_seg1", xr, yo,              "0",          "-Lio_one"
+MakeSegment "RL_seg2", xr, yo&"-Lio_one",   "-Wio/2",     "0"
+MakeSegment "RL_seg3", xr&"-Wio/2",         yo&"-Lio_one","0", "-Lio_two"
+MakeSegment "RL_seg4", xr&"-Wio/2",         yo&"-Lio_one-Lio_two","Lio_three","0"
+MakeSegment "RL_seg5", xr&"-Wio/2+Lio_three",yo&"-Lio_one-Lio_two","0","-Lio_four"
+MakeSegment "RL_seg6", xr&"-Wio/2+Lio_three",yo&"-Lio_one-Lio_two-Lio_four","Lio_five","0"
+MakeSegment "RL_seg7", xr&"-Wio/2+Lio_three+Lio_five",yo&"-Lio_one-Lio_two-Lio_four","0","Lio_six"
+MakeSegment "RL_seg8", xr&"-Wio/2+Lio_three+Lio_five",yo&"-Lio_one-Lio_two-Lio_four+Lio_six","-Lio_seven","0"
+MakeSegment "RL_seg9", xr&"-Wio/2+Lio_three+Lio_five-Lio_seven",yo&"-Lio_one-Lio_two-Lio_four+Lio_six","0","Lio_eight"
+MakeSegment "RL_seg10",xr&"-Wio/2+Lio_three+Lio_five-Lio_seven",yo&"-Lio_one-Lio_two-Lio_four+Lio_six+Lio_eight","-Lio_nine","0"
+MakeSegment "RL_seg11",xr&"-Wio/2+Lio_three+Lio_five-Lio_seven-Lio_nine",yo&"-Lio_one-Lio_two-Lio_four+Lio_six+Lio_eight","0","Lio_ten"
+
+oEditor.CreateRectangle Array("NAME:RectangleParameters","IsCovered:=",true,"XStart:=", _
+   xr&"-Wio/2+Lio_three+Lio_five-Lio_seven-Lio_nine","YStart:=",yo&"-Lio_one-Lio_two-Lio_four+Lio_six+Lio_eight+Lio_ten", _
+   "ZStart:=","0mil","Width:=","Port_Width","Height:=","Cond_Trace","WhichAxis:=","X"), _
+   Array("NAME:Attributes","Name:=","Port2_Obj","MaterialValue:=","\"Copper_HP\"","Color:=","(128 128 255)")
+
+oBnd.AssignWavePort Array("NAME:Port2","Objects:=",Array("Port2_Obj"),"NumModes:=",1,"RenormalizeAllTerminals:=",true, _
+  "UseLineAlignment:=",false,"DoDeembed:=",false,Array("NAME:Modes",Array("NAME:Mode1","ModeNum:=",1,"UseIntLine:=",false,"CharImp:=","Zpi")))
+
+'-------------------------------------------------------------------------------
+' 9.  ANALYSIS SET‑UPS  (three – one broadband + two mesh‑linked singles)
+'-------------------------------------------------------------------------------
+Set oSetup = oDesign.GetModule("AnalysisSetup")
+Dim fc : fc = "fc_GHz & \"GHz\""
+oSetup.InsertSetup "HfssDriven", Array( _
+   "NAME:BROAD","Frequency:=",fc,"MaxDeltaS:=","Mesh_ΔS","MaximumPasses:=","20","PercentRefinement:=","15")
+
+oSetup.InsertFrequencySweep "BROAD", Array( _
+   "NAME:Sweep1","IsEnabled:=",true,"SetupType:=","Interpolating","StartValue:=","StartFreq_GHz&\"GHz\"","StopValue:=","StopFreq_GHz&\"GHz\"", _
+   "InterpTolerance:=","0.4","InterpMaxSols:=","200","InterpMinSubranges:=","1","SaveFields:=",false,"ExtrapToDC:=",false)
+
+' mesh‑linked point above fc
+oSetup.InsertSetup "HfssDriven", Array( _
+   "NAME:HI_POINT","Frequency:=","fc_GHz+0.3&\"GHz\"","MaximumPasses:=","6", _
+   Array("NAME:MeshLink","Project:=","This Project","Design:=","This Design","Soln:=","BROAD : LastAdaptive", _
+         Array("NAME:Params","ForceSourceToSolve:=",false,"PreservePartnerSoln:=",false,"PathRelativeTo:=","TargetProject","ApplyMeshOp:=",false,"AdaptPort:=",false) ) )
+
+' mesh‑linked point below fc
+oSetup.InsertSetup "HfssDriven", Array( _
+   "NAME:LO_POINT","Frequency:=","fc_GHz-0.3&\"GHz\"","MaximumPasses:=","6", _
+   Array("NAME:MeshLink","Project:=","This Project","Design:=","This Design","Soln:=","HI_POINT : LastAdaptive", _
+         Array("NAME:Params","ForceSourceToSolve:=",false,"PreservePartnerSoln:=",false,"PathRelativeTo:=","TargetProject","ApplyMeshOp:=",false,"AdaptPort:=",false) ) )
+
+'-------------------------------------------------------------------------------
+' 10.  REPORT TEMPLATE
+'-------------------------------------------------------------------------------
+Dim oRpt : Set oRpt = oDesign.GetModule("ReportSetup")
+oRpt.CreateReport "S‑21","Modal Solution Data","Rectangular Plot","BROAD : Sweep1",Array("Freq"), _
+    Array("X Component:=","Freq","Y Component:=","dB(S(Port2,Port1)) dB"),Array("Context:=","")
+
+'-------------------------------------------------------------------------------
+' 11.  FINISH
+'-------------------------------------------------------------------------------
+MsgBox "8‑pole multi‑layer stripline filter generated!  You can now analyse."
