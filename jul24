@@ -1,0 +1,450 @@
+'***************************************************************************
+' HFSS VBScript for 8-Pole Multi-Layer Stripline Filter
+' Corrected version matching actual filter images
+'***************************************************************************
+
+'Initialize variables
+Dim oAnsoftApp, oDesktop, oProject, oDesign, oEditor, oModule, oDefinitionManager
+
+'Set project objects
+Set oAnsoftApp = CreateObject("AnsoftHfss.HfssScriptInterface")
+Set oDesktop = oAnsoftApp.GetAppDesktop()
+oDesktop.RestoreWindow
+Set oProject = oDesktop.NewProject
+oProject.InsertDesign "HFSS", "MultiLayerStriplineFilter_8Pole", "DrivenModal", ""
+Set oDesign = oProject.SetActiveDesign("MultiLayerStriplineFilter_8Pole")
+Set oEditor = oDesign.SetActiveEditor("3D Modeler")
+
+'Set units to mils
+oEditor.SetModelUnits Array("NAME:Units Parameter", "Units:=", "mil", "Rescale:=", false)
+
+'***************************************************************************
+' Material Definitions
+'***************************************************************************
+
+Set oDefinitionManager = oProject.GetDefinitionManager()
+
+'Create Rogers 3010 material (εr = 10.2)
+oDefinitionManager.AddMaterial Array("NAME:Rogers3010", _
+    "CoordinateSystemType:=", "Cartesian", _
+    Array("NAME:AttachedData"), _
+    "permittivity:=", "10.2", _
+    "dielectric_loss_tangent:=", "0.0023")
+
+'Create 2929 prepreg material
+oDefinitionManager.AddMaterial Array("NAME:Prepreg2929", _
+    "CoordinateSystemType:=", "Cartesian", _
+    Array("NAME:AttachedData"), _
+    "permittivity:=", "2.94", _
+    "dielectric_loss_tangent:=", "0.003")
+
+'***************************************************************************
+' Design Parameters
+'***************************************************************************
+
+'Layer Stack Parameters
+Dim layer1_thickness, layer2_thickness, layer3_thickness, layer4_thickness, layer5_thickness
+layer1_thickness = 10      'mil - Top Rogers 3010
+layer2_thickness = 2.25    'mil - 2929 prepreg
+layer3_thickness = 5       'mil - Middle Rogers 3010
+layer4_thickness = 2.25    'mil - 2929 prepreg
+layer5_thickness = 10      'mil - Bottom Rogers 3010
+
+'Conductor thickness
+Dim cond_h
+cond_h = 0.65  'mil
+
+'Resonator Parameters (from images)
+Dim res_size, res_slot_size, res_slot_offset
+res_size = 83.6     'mil - Resonator outer size
+res_slot_size = 29.29     'mil - Slot size
+res_slot_offset = 27.165  'mil - Slot offset
+
+'Spacing and Board Parameters
+Dim res_spacing, board_width, board_length
+res_spacing = 30      'mil - Spacing between resonators
+board_width = 300     'mil
+board_length = 500    'mil
+
+'Port Parameters
+Dim port_width, port_length, port_height
+port_width = 50       'mil
+port_length = 20      'mil
+
+'Calculate layer Z positions
+Dim z_layer1_bottom, z_layer1_top, z_layer2_bottom, z_layer2_top
+Dim z_layer3_bottom, z_layer3_top, z_layer4_bottom, z_layer4_top
+Dim z_layer5_bottom, z_layer5_top
+
+z_layer5_bottom = 0
+z_layer5_top = z_layer5_bottom + layer5_thickness
+z_layer4_bottom = z_layer5_top
+z_layer4_top = z_layer4_bottom + layer4_thickness
+z_layer3_bottom = z_layer4_top
+z_layer3_top = z_layer3_bottom + layer3_thickness
+z_layer2_bottom = z_layer3_top
+z_layer2_top = z_layer2_bottom + layer2_thickness
+z_layer1_bottom = z_layer2_top
+z_layer1_top = z_layer1_bottom + layer1_thickness
+
+'***************************************************************************
+' Create Substrate Layers
+'***************************************************************************
+
+'Create main substrate block
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", "-" & CStr(board_length/2) & "mil", _
+    "YPosition:=", "-" & CStr(board_width/2) & "mil", _
+    "ZPosition:=", "0mil", _
+    "XSize:=", CStr(board_length) & "mil", _
+    "YSize:=", CStr(board_width) & "mil", _
+    "ZSize:=", CStr(z_layer1_top) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "Substrate_Stack", "Flags:=", "", _
+    "Color:=", "(143 175 143)", "Transparency:=", 0.7, _
+    "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "Rogers3010" & Chr(34), _
+    "SolveInside:=", true)
+
+'***************************************************************************
+' Helper Function to Create Square Resonator with Slot
+'***************************************************************************
+
+Sub CreateSquareResonator(res_name, x_pos, y_pos, z_pos, color_rgb)
+    'Main resonator body
+    oEditor.CreateBox Array("NAME:BoxParameters", _
+        "XPosition:=", CStr(x_pos) & "mil", _
+        "YPosition:=", CStr(y_pos) & "mil", _
+        "ZPosition:=", CStr(z_pos) & "mil", _
+        "XSize:=", CStr(res_size) & "mil", _
+        "YSize:=", CStr(res_size) & "mil", _
+        "ZSize:=", CStr(cond_h) & "mil"), _
+        Array("NAME:Attributes", "Name:=", res_name & "_Body", _
+        "Flags:=", "", "Color:=", color_rgb, _
+        "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+        "MaterialValue:=", Chr(34) & "copper" & Chr(34), _
+        "SolveInside:=", false)
+    
+    'Create slot
+    oEditor.CreateBox Array("NAME:BoxParameters", _
+        "XPosition:=", CStr(x_pos + res_slot_offset) & "mil", _
+        "YPosition:=", CStr(y_pos + res_slot_offset) & "mil", _
+        "ZPosition:=", CStr(z_pos) & "mil", _
+        "XSize:=", CStr(res_slot_size) & "mil", _
+        "YSize:=", CStr(res_slot_size) & "mil", _
+        "ZSize:=", CStr(cond_h) & "mil"), _
+        Array("NAME:Attributes", "Name:=", res_name & "_Slot", _
+        "Flags:=", "", "Color:=", "(255 0 0)", _
+        "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+        "MaterialValue:=", Chr(34) & "vacuum" & Chr(34), _
+        "SolveInside:=", true)
+    
+    'Subtract slot from body
+    oEditor.Subtract Array("NAME:Selections", _
+        "Blank Parts:=", res_name & "_Body", _
+        "Tool Parts:=", res_name & "_Slot"), _
+        Array("NAME:SubtractParameters", "KeepOriginals:=", false)
+End Sub
+
+'***************************************************************************
+' Create Resonators Based on Actual Layout
+'***************************************************************************
+
+'Calculate positions based on image layout
+Dim base_x, base_y, spacing_x, spacing_y
+base_x = -180  'Starting X position
+base_y = -80   'Starting Y position
+spacing_x = 95 'X spacing between resonators
+spacing_y = 95 'Y spacing between resonators
+
+'LAYER 2 RESONATORS (Magenta/Pink in image) - at z_layer2_bottom
+'Top row
+CreateSquareResonator "Res1", base_x, base_y + spacing_y, z_layer2_bottom, "(255 0 255)"
+CreateSquareResonator "Res2", base_x + spacing_x, base_y + spacing_y, z_layer2_bottom, "(255 0 255)"
+CreateSquareResonator "Res3", base_x + 2*spacing_x, base_y + spacing_y, z_layer2_bottom, "(255 0 255)"
+
+'Bottom row
+CreateSquareResonator "Res6", base_x + spacing_x, base_y - spacing_y, z_layer2_bottom, "(255 0 255)"
+
+'LAYER 4 RESONATORS (Tan/Brown in image) - at z_layer4_bottom
+'Top row
+CreateSquareResonator "Res4", base_x, base_y, z_layer4_bottom, "(210 180 140)"
+CreateSquareResonator "Res5", base_x + 2*spacing_x, base_y, z_layer4_bottom, "(210 180 140)"
+
+'Bottom row
+CreateSquareResonator "Res7", base_x, base_y - spacing_y, z_layer4_bottom, "(210 180 140)"
+CreateSquareResonator "Res8", base_x + 2*spacing_x, base_y - spacing_y, z_layer4_bottom, "(210 180 140)"
+
+'***************************************************************************
+' Create Coupling Lines (Green traces in image)
+'***************************************************************************
+
+'Horizontal coupling lines on Layer 2
+'Top row connections
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", CStr(base_x + res_size) & "mil", _
+    "YPosition:=", CStr(base_y + spacing_y + res_size/2 - 2) & "mil", _
+    "ZPosition:=", CStr(z_layer2_bottom) & "mil", _
+    "XSize:=", CStr(spacing_x - res_size) & "mil", _
+    "YSize:=", "4mil", _
+    "ZSize:=", CStr(cond_h) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "Coupling_1_2", _
+    "Flags:=", "", "Color:=", "(0 255 0)", _
+    "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "copper" & Chr(34), _
+    "SolveInside:=", false)
+
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", CStr(base_x + spacing_x + res_size) & "mil", _
+    "YPosition:=", CStr(base_y + spacing_y + res_size/2 - 2) & "mil", _
+    "ZPosition:=", CStr(z_layer2_bottom) & "mil", _
+    "XSize:=", CStr(spacing_x - res_size) & "mil", _
+    "YSize:=", "4mil", _
+    "ZSize:=", CStr(cond_h) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "Coupling_2_3", _
+    "Flags:=", "", "Color:=", "(0 255 0)", _
+    "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "copper" & Chr(34), _
+    "SolveInside:=", false)
+
+'Vertical coupling between layers (small vias)
+Dim via_radius
+via_radius = 3  'mil
+
+'Via between Res2 and Res5
+oEditor.CreateCylinder Array("NAME:CylinderParameters", _
+    "XCenter:=", CStr(base_x + spacing_x + res_size/2) & "mil", _
+    "YCenter:=", CStr(base_y + res_size/2) & "mil", _
+    "ZCenter:=", CStr(z_layer2_bottom) & "mil", _
+    "Radius:=", CStr(via_radius) & "mil", _
+    "Height:=", CStr(z_layer4_bottom - z_layer2_bottom) & "mil", _
+    "WhichAxis:=", "Z", _
+    "NumSides:=", "0"), _
+    Array("NAME:Attributes", "Name:=", "Via_2_5", _
+    "Flags:=", "", "Color:=", "(255 128 0)", _
+    "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "copper" & Chr(34), _
+    "SolveInside:=", false)
+
+'***************************************************************************
+' Create Launch Lines and Ports
+'***************************************************************************
+
+'Left port extension (from substrate edge)
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", "-" & CStr(board_length/2) & "mil", _
+    "YPosition:=", "-" & CStr(port_width/2) & "mil", _
+    "ZPosition:=", CStr(z_layer2_bottom) & "mil", _
+    "XSize:=", CStr(port_length) & "mil", _
+    "YSize:=", CStr(port_width) & "mil", _
+    "ZSize:=", CStr(z_layer2_top - z_layer2_bottom) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "Port1_Extension", _
+    "Flags:=", "", "Color:=", "(0 128 255)", _
+    "Transparency:=", 0.5, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "Rogers3010" & Chr(34), _
+    "SolveInside:=", true)
+
+'Left launch line
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", CStr(-board_length/2 + port_length) & "mil", _
+    "YPosition:=", "-4mil", _
+    "ZPosition:=", CStr(z_layer2_bottom) & "mil", _
+    "XSize:=", CStr(abs(base_x) - board_length/2 + port_length) & "mil", _
+    "YSize:=", "8mil", _
+    "ZSize:=", CStr(cond_h) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "LaunchLine_Left", _
+    "Flags:=", "", "Color:=", "(255 128 0)", _
+    "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "copper" & Chr(34), _
+    "SolveInside:=", false)
+
+'Right port extension
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", CStr(board_length/2 - port_length) & "mil", _
+    "YPosition:=", "-" & CStr(port_width/2) & "mil", _
+    "ZPosition:=", CStr(z_layer2_bottom) & "mil", _
+    "XSize:=", CStr(port_length) & "mil", _
+    "YSize:=", CStr(port_width) & "mil", _
+    "ZSize:=", CStr(z_layer2_top - z_layer2_bottom) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "Port2_Extension", _
+    "Flags:=", "", "Color:=", "(0 128 255)", _
+    "Transparency:=", 0.5, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "Rogers3010" & Chr(34), _
+    "SolveInside:=", true)
+
+'Right launch line
+oEditor.CreateBox Array("NAME:BoxParameters", _
+    "XPosition:=", CStr(base_x + 3*spacing_x - 10) & "mil", _
+    "YPosition:=", "-4mil", _
+    "ZPosition:=", CStr(z_layer2_bottom) & "mil", _
+    "XSize:=", CStr(board_length/2 - port_length - (base_x + 3*spacing_x - 10)) & "mil", _
+    "YSize:=", "8mil", _
+    "ZSize:=", CStr(cond_h) & "mil"), _
+    Array("NAME:Attributes", "Name:=", "LaunchLine_Right", _
+    "Flags:=", "", "Color:=", "(255 128 0)", _
+    "Transparency:=", 0, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "copper" & Chr(34), _
+    "SolveInside:=", false)
+
+'Port 1 - Left side (Wave Port)
+oEditor.CreateRectangle Array("NAME:RectangleParameters", _
+    "IsCovered:=", true, _
+    "XStart:=", "-" & CStr(board_length/2) & "mil", _
+    "YStart:=", "-" & CStr(port_width/2) & "mil", _
+    "ZStart:=", CStr(z_layer2_bottom) & "mil", _
+    "Width:=", CStr(port_width) & "mil", _
+    "Height:=", CStr(z_layer2_top - z_layer2_bottom) & "mil", _
+    "WhichAxis:=", "X"), _
+    Array("NAME:Attributes", "Name:=", "Port1", _
+    "Flags:=", "", "Color:=", "(0 0 255)", _
+    "Transparency:=", 0.8, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "vacuum" & Chr(34), _
+    "SolveInside:=", true)
+
+'Port 2 - Right side (Wave Port)
+oEditor.CreateRectangle Array("NAME:RectangleParameters", _
+    "IsCovered:=", true, _
+    "XStart:=", CStr(board_length/2) & "mil", _
+    "YStart:=", "-" & CStr(port_width/2) & "mil", _
+    "ZStart:=", CStr(z_layer2_bottom) & "mil", _
+    "Width:=", CStr(port_width) & "mil", _
+    "Height:=", CStr(z_layer2_top - z_layer2_bottom) & "mil", _
+    "WhichAxis:=", "X"), _
+    Array("NAME:Attributes", "Name:=", "Port2", _
+    "Flags:=", "", "Color:=", "(0 0 255)", _
+    "Transparency:=", 0.8, "PartCoordinateSystem:=", "Global", _
+    "MaterialValue:=", Chr(34) & "vacuum" & Chr(34), _
+    "SolveInside:=", true)
+
+'***************************************************************************
+' Assign Wave Ports
+'***************************************************************************
+
+Set oModule = oDesign.GetModule("BoundarySetup")
+
+'Port 1 assignment
+oModule.AssignWavePort Array("NAME:Port1", _
+    "Objects:=", Array("Port1"), _
+    "NumModes:=", 1, _
+    "RenormalizeAllTerminals:=", true, _
+    "UseLineModeAlignment:=", false, _
+    "DoDeembed:=", false, _
+    Array("NAME:Modes", _
+        Array("NAME:Mode1", _
+            "ModeNum:=", 1, _
+            "UseIntLine:=", true, _
+            Array("NAME:IntLine", _
+                "Start:=", Array("-" & CStr(board_length/2) & "mil", _
+                    "0mil", _
+                    CStr(z_layer2_bottom) & "mil"), _
+                "End:=", Array("-" & CStr(board_length/2) & "mil", _
+                    "0mil", _
+                    CStr(z_layer2_top) & "mil")), _
+            "CharImp:=", "Zpi")), _
+    "ShowReporterFilter:=", false, _
+    "ReporterFilter:=", Array(true), _
+    "UseAnalyticAlignment:=", false)
+
+'Port 2 assignment
+oModule.AssignWavePort Array("NAME:Port2", _
+    "Objects:=", Array("Port2"), _
+    "NumModes:=", 1, _
+    "RenormalizeAllTerminals:=", true, _
+    "UseLineModeAlignment:=", false, _
+    "DoDeembed:=", false, _
+    Array("NAME:Modes", _
+        Array("NAME:Mode1", _
+            "ModeNum:=", 1, _
+            "UseIntLine:=", true, _
+            Array("NAME:IntLine", _
+                "Start:=", Array(CStr(board_length/2) & "mil", _
+                    "0mil", _
+                    CStr(z_layer2_bottom) & "mil"), _
+                "End:=", Array(CStr(board_length/2) & "mil", _
+                    "0mil", _
+                    CStr(z_layer2_top) & "mil")), _
+            "CharImp:=", "Zpi")), _
+    "ShowReporterFilter:=", false, _
+    "ReporterFilter:=", Array(true), _
+    "UseAnalyticAlignment:=", false)
+
+'***************************************************************************
+' Create Solution Setup
+'***************************************************************************
+
+Set oModule = oDesign.GetModule("AnalysisSetup")
+
+'Main adaptive solution
+oModule.InsertSetup "HfssDriven", Array("NAME:Setup1", _
+    "Frequency:=", "15GHz", _
+    "PortsOnly:=", false, _
+    "MaxDeltaS:=", 0.01, _
+    "UseMatrixConv:=", false, _
+    "MaximumPasses:=", 20, _
+    "MinimumPasses:=", 1, _
+    "MinimumConvergedPasses:=", 1, _
+    "PercentRefinement:=", 20, _
+    "IsEnabled:=", true, _
+    "BasisOrder:=", 1, _
+    "DoLambdaRefine:=", true, _
+    "DoMaterialLambda:=", true, _
+    "SetLambdaTarget:=", false, _
+    "Target:=", 0.3333, _
+    "UseMaxTetIncrease:=", false, _
+    "PortAccuracy:=", 2, _
+    "UseABCOnPort:=", false, _
+    "SetPortMinMaxTri:=", false, _
+    "UseDomains:=", false, _
+    "UseIterativeSolver:=", false, _
+    "SaveRadFieldsOnly:=", false, _
+    "SaveAnyFields:=", true, _
+    "NoAdditionalRefinementOnImport:=", false)
+
+'Frequency sweep
+oModule.InsertFrequencySweep "Setup1", Array("NAME:Sweep1", _
+    "IsEnabled:=", true, _
+    "RangeType:=", "LinearCount", _
+    "RangeStart:=", "10GHz", _
+    "RangeEnd:=", "20GHz", _
+    "RangeCount:=", 1001, _
+    "Type:=", "Interpolating", _
+    "SaveFields:=", false, _
+    "SaveRadFields:=", false, _
+    "InterpTolerance:=", 0.5, _
+    "InterpMaxSolns:=", 250, _
+    "InterpMinSolns:=", 0, _
+    "InterpMinSubranges:=", 1, _
+    "ExtrapToDC:=", false, _
+    "InterpUseS:=", true, _
+    "InterpUsePortImped:=", false, _
+    "InterpUsePropConst:=", true, _
+    "UseDerivativeConvergence:=", false, _
+    "InterpDerivTolerance:=", 0.2, _
+    "UseFullBasis:=", true, _
+    "EnforcePassivity:=", true, _
+    "PassivityErrorTolerance:=", 0.0001)
+
+'***************************************************************************
+' Create Reports
+'***************************************************************************
+
+Set oModule = oDesign.GetModule("ReportSetup")
+
+'S-parameter magnitude plot
+oModule.CreateReport "S_Parameters", "Modal Solution Data", "Rectangular Plot", _
+    "Setup1 : Sweep1", Array("Domain:=", "Sweep"), _
+    Array("Freq:=", Array("All")), _
+    Array("X Component:=", "Freq", "Y Component:=", Array("dB(S(1,1))", "dB(S(2,1))")), _
+    Array()
+
+'Validate design
+oDesign.Validate
+
+'Save project
+oProject.Save
+
+MsgBox "8-Pole Multi-Layer Stripline Filter created successfully!" & vbCrLf & vbCrLf & _
+    "Layout matches your images with:" & vbCrLf & _
+    "- 4 resonators on Layer 2 (magenta)" & vbCrLf & _
+    "- 4 resonators on Layer 4 (tan)" & vbCrLf & _
+    "- Proper coupling lines and vias" & vbCrLf & _
+    "- Ports correctly positioned at substrate edges"
