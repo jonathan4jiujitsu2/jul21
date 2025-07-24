@@ -1,0 +1,17 @@
+Goal 1: Become trained with RF simulation software applications
+
+Status: Completed
+Summary:
+Completed training and gained hands-on experience with HFSS, ADS, and MATLAB. I now feel confident using these tools to support RF filter design, automation, and simulation workflows.
+
+Goal 2: Develop script files in support of improving HFSS efficiencies
+
+Status: In Progress
+Summary:
+Developed and integrated an 800-line script into the RF Autonomous Tool. The script generates a filter structure with adjustable parameters, but it does not yet match the intended layout. Further debugging is in progress to correct layout issues, particularly with complex microstrip transitions.
+
+Goal 3: Develop script to detect vehicle entering and exiting parking lot
+
+Status: Completed
+Summary:
+Built a Python-based system that detects vehicle entry and exit using ultrasonic sensors, timestamps events with an RTC, and logs the data. The system runs reliably for the full duration of a shift and supports future expansion.
